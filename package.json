@@ -11,6 +11,9 @@
     "react-scripts": "5.0.1",
     "three": "^0.182.0"
   },
+  "overrides": {
+    "@types/node": "24.10.13"
+  },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
