@@ -58,19 +58,19 @@ This setup opens:
 cd ~/aera
 ```
 
-### 2) Run kiosk setup once
+### 2) Create a clickable desktop launcher
 
 ```bash
-chmod +x pi/kiosk/setup-kiosk.sh
-./pi/kiosk/setup-kiosk.sh
+chmod +x pi/kiosk/install-desktop-shortcut.sh
+./pi/kiosk/install-desktop-shortcut.sh "https://aerasmartmirror.netlify.app/" "https://chatgpt.com/"
 ```
 
-This installs helper tools and creates GUI autostart:
-- `~/.config/autostart/aera-kiosk.desktop`
+This installs helper tools and creates:
+- `~/Desktop/AERA Kiosk.desktop`
 
-### 3) Reboot
+### 3) Launch from Desktop
 
-After reboot, Chromium opens in kiosk mode with both tabs.
+Double-click `AERA Kiosk` on Desktop.
 
 ### 4) One-time ChatGPT preparation
 
@@ -80,15 +80,6 @@ After reboot, Chromium opens in kiosk mode with both tabs.
 4. Return to AERA (`Ctrl+1`).
 
 Now AERA stays visible while ChatGPT runs in the background tab.
-
-### 5) Optional URL customization
-
-Edit:
-- `~/.config/autostart/aera-kiosk.desktop`
-
-Change:
-- `AERA_URL=...`
-- `CHATGPT_URL=...`
 
 ### Notes
 
