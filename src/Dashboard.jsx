@@ -534,12 +534,12 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
           <div className="audio-monitor">
             <div className="audio-monitor-row">
               <span className="audio-monitor-label">Source</span>
-              <span className="audio-monitor-value" title={audioSourceLabel}>{audioSourceLabel}</span>
+              <span className="audio-monitor-value" title="Microphone">Microphone</span>
             </div>
 
             <div className="audio-monitor-row">
               <span className="audio-monitor-label">Status</span>
-              <span className="audio-monitor-value" title={audioStatus}>{audioStatus}</span>
+              <span className="audio-monitor-value" title="Online">Online</span>
             </div>
 
             <div className="audio-monitor-row">
