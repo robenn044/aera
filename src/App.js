@@ -3,7 +3,6 @@ import * as tf from '@tensorflow/tfjs';
 import * as blazeface from '@tensorflow-models/blazeface';
 import LockScreen from './LockScreen';
 import Dashboard from './Dashboard';
-import VoiceAgent from './VoiceAgent';
 import './App.css';
 
 const AUTO_LOCK_MS = 60 * 1000;
@@ -379,8 +378,7 @@ function App() {
 
   return (
     <div className="app-container" onClick={isLocked ? handleUnlock : undefined}>
-      <VoiceAgent />
-
+      
       {/* 1. The Lock Screen (Top Layer) */}
       <div className={`screen screen-lock ${isLocked ? 'visible' : 'hidden'}`}>
         <LockScreen />

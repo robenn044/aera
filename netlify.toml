@@ -2,9 +2,6 @@
   command = "npm run build"
   publish = "build"
 
-[functions]
-  directory = "netlify/functions"
-
 [build.environment]
   NODE_VERSION = "20"
   GENERATE_SOURCEMAP = "false"
