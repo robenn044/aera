@@ -1,0 +1,108 @@
+/* Reset and base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.lock-screen-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  background-color: #000000;
+  overflow: hidden;
+  font-family: 'Montserrat', sans-serif;
+}
+
+/* LAYER 1: The Background */
+.background-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* LAYER 2: The Subtle Overlay (Middle) */
+.overlay-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2; 
+  /* SUBTLE BLUR: Changed from 6px to 2px */
+  backdrop-filter: blur(2px); 
+  /* LIGHT TINT: Changed from 0.4 to 0.15 */
+  background: rgba(0, 0, 0, 0.15); 
+  /* Noise texture */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* LAYER 3: The Content (Top) */
+.content-layer {
+  position: relative;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 40px 20px;
+  color: #ffffff;
+}
+
+/* Clock Section */
+.clock-section {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.greeting-display {
+  font-size: 1.2rem;
+  font-weight: 200;
+  color: #e0e0e0;
+  margin-bottom: 5px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.time-display {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 8rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  /* Strong shadow to keep text readable against the busy background */
+  text-shadow: 
+    0 0 15px rgba(255, 255, 255, 0.9),
+    0 0 30px rgba(0, 0, 0, 0.5); 
+}
+
+.date-display {
+  font-size: 1.2rem;
+  font-weight: 400;
+  color: #c0c0c0;
+  margin-top: 15px;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+}
+
+/* Footer Section */
+.footer-section {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.dev-note {
+  font-size: 0.65rem;
+  color: #666666;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}

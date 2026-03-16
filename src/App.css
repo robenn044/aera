@@ -1,0 +1,46 @@
+/* Container for both screens */
+.app-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: black;
+}
+
+/* Common style for both screens so they stack on top of each other */
+.screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.8s ease-in-out, transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* STATE: LOCKED (Show Lock Screen, Hide Dashboard) */
+.screen-dashboard.hidden {
+  opacity: 0;
+  transform: scale(1.1); /* Slight zoom for effect */
+  pointer-events: none;  /* Can't click it while hidden */
+  z-index: 0;
+}
+
+.screen-lock.visible {
+  opacity: 1;
+  transform: scale(1);
+  z-index: 2; /* Sits on top */
+}
+
+/* STATE: UNLOCKED (Hide Lock Screen, Show Dashboard) */
+.screen-lock.hidden {
+  opacity: 0;
+  transform: scale(1.1); /* Zoom out as it fades */
+  pointer-events: none;
+  z-index: 2;
+}
+
+.screen-dashboard.visible {
+  opacity: 1;
+  transform: scale(1);
+  z-index: 1;
+}
