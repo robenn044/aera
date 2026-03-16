@@ -2,25 +2,31 @@
 
 .dashboard {
   display: flex;
+  flex-direction: row;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
   overflow: hidden;
   background: #000;
   color: #f5f5f5;
   font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
 }
 
 .camera-section {
-  flex: 7 1 0;
+  flex: 70 0 0;
   min-width: 0;
+  min-height: 0;
+  width: 70%;
   height: 100%;
   background: #000;
   position: relative;
+  overflow: hidden;
 }
 
 .camera-video {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -28,21 +34,26 @@
 }
 
 .panel {
-  flex: 3 1 0;
+  flex: 30 0 0;
   min-width: 0;
   min-height: 0;
+  width: 30%;
   height: 100%;
   background: #000;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   display: grid;
   grid-template-rows: auto 1fr auto;
+  grid-template-columns: 1fr;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* TOP */
 .panel-top {
-  padding: 20px 20px 14px;
+  padding: 16px 16px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  min-height: 0;
 }
 
 .greeting-row {
@@ -87,24 +98,24 @@
   display: flex;
   align-items: baseline;
   gap: 2px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .clock-digit {
   font-family: 'Big Shoulders Display', sans-serif;
-  font-size: clamp(2.6rem, 6.4vw, 3.75rem);
+  font-size: 2.8rem;
   font-weight: 200;
   letter-spacing: -0.05em;
   color: #f5f5f5;
-  line-height: 1;
+  line-height: 0.9;
 }
 
 .clock-colon {
   font-family: 'Big Shoulders Display', sans-serif;
-  font-size: clamp(2.1rem, 5vw, 3rem);
+  font-size: 2.2rem;
   font-weight: 200;
   color: rgba(0, 191, 255, 0.4);
-  line-height: 1;
+  line-height: 0.9;
   margin-bottom: 2px;
 }
 
@@ -210,66 +221,50 @@
 
 /* BOTTOM */
 .panel-bottom {
-  padding: 12px 20px 20px;
+  padding: 10px 16px 16px;
   display: block;
-  min-height: 110px;
+  min-height: 100px;
+  max-height: 140px;
   overflow: hidden;
-}
-
-@media (max-width: 900px) {
-  .dashboard {
-    flex-direction: column;
-  }
-
-  .camera-section {
-    flex: 0 0 55%;
-    width: 100%;
-  }
-
-  .panel {
-    flex: 1 1 auto;
-    width: 100%;
-    border-left: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .orb-container {
-    width: 45%;
-    max-width: 180px;
-  }
+  box-sizing: border-box;
 }
 
 .audio-monitor {
   width: 100%;
   display: grid;
-  gap: 7px;
+  gap: 5px;
+  font-size: 0.6rem;
 }
 
 .audio-monitor-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  min-height: 16px;
 }
 
 .audio-monitor-label {
-  font-size: 0.54rem;
+  font-size: 0.5rem;
   color: rgba(255, 255, 255, 0.42);
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
+  flex-shrink: 0;
 }
 
 .audio-monitor-value,
 .audio-monitor-state {
-  font-size: 0.67rem;
+  font-size: 0.6rem;
   color: rgba(255, 255, 255, 0.88);
   font-family: 'Inter', sans-serif;
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1;
+  flex-shrink: 1;
+  min-width: 0;
+  text-align: right;
 }
 
 .audio-monitor-value {
-  max-width: 62%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -285,10 +280,11 @@
 
 .audio-monitor-meter {
   width: 100%;
-  height: 7px;
+  height: 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.09);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .audio-monitor-meter > span {
