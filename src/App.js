@@ -5,10 +5,22 @@ import LockScreen from './LockScreen';
 import Dashboard from './Dashboard';
 import VoiceAgent from './VoiceAgent';
 import ScriptMode from './ScriptMode';
+import PresentationDisplay from './PresentationDisplay';
+import RemoteController from './RemoteController';
 import './App.css';
 
-// Check if we're on the script mode page
-const isScriptMode = window.location.pathname === '/script' || window.location.hash === '#script';
+// Check which mode we're in based on URL path
+const getAppMode = () => {
+  const path = window.location.pathname;
+  const hash = window.location.hash;
+  
+  if (path === '/display' || hash === '#display') return 'display';
+  if (path === '/control' || hash === '#control') return 'control';
+  if (path === '/script' || hash === '#script') return 'script';
+  return 'main';
+};
+
+const appMode = getAppMode();
 
 const AUTO_LOCK_MS = 60 * 1000;
 const FACE_DETECT_INTERVAL_MS = 220;
@@ -381,8 +393,16 @@ function App() {
     };
   }, [cameraStream, handleUnlock, isLocked]);
 
-  // Render Script Mode if on /script path
-  if (isScriptMode) {
+  // Render based on app mode
+  if (appMode === 'display') {
+    return <PresentationDisplay />;
+  }
+  
+  if (appMode === 'control') {
+    return <RemoteController />;
+  }
+  
+  if (appMode === 'script') {
     return <ScriptMode />;
   }
 
