@@ -44,7 +44,7 @@ export async function transcribeAudio(blob) {
 
   let res;
   try {
-    res = await fetch('/.netlify/functions/transcribe', {
+    res = await fetch('/api/transcribe', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,5 +71,11 @@ export async function transcribeAudio(blob) {
     throw new Error('STT response missing text');
   }
 
-  return text;
+  // Return full response object for better filtering
+  return {
+    text,
+    noSpeechProb: data?.no_speech_prob ?? null,
+    duration: data?.duration ?? null,
+    language: data?.language ?? 'en',
+  };
 }

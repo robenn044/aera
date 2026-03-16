@@ -24,7 +24,7 @@ export async function chatCompletions(messages, options = {}) {
 
   let res;
   try {
-    res = await fetch('/.netlify/functions/chat', {
+    res = await fetch('/api/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

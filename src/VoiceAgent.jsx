@@ -2,14 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { chatCompletions } from './llmClient';
 import { transcribeAudio } from './sttClient';
 
-const SILENCE_HOLD_MS = 950;
-const POST_TTS_COOLDOWN_MS = 1200;
-const VAD_INTERVAL_MS = 80;
+// Tuned VAD settings for better voice detection
+const SILENCE_HOLD_MS = 1200; // Longer pause before ending recording
+const POST_TTS_COOLDOWN_MS = 1500; // Longer cooldown after speaking
+const VAD_INTERVAL_MS = 60; // Faster VAD polling
+const MIN_SPEECH_DURATION_MS = 400; // Minimum recording duration
+const MIN_RECORDING_MS = 600; // Don't process recordings shorter than this
 
 const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const SYSTEM_PROMPT =
-  'You are AERA, a hands-free voice assistant for a smart mirror. Reply in concise, natural spoken English. Keep responses short unless asked for detail.';
+const SYSTEM_PROMPT = `You are AERA, a hands-free voice assistant for a smart mirror. 
+Reply in concise, natural spoken English. Keep responses short (1-2 sentences) unless asked for detail.
+Be helpful, friendly, and conversational. If you don't understand something, ask for clarification.`;
 
 const toCleanText = (text) => (text || '').replace(/\s+/g, ' ').trim();
 
@@ -20,33 +24,46 @@ const num = (value, fallback) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-const isLikelyNoise = (text, { wakeWordEnabled } = {}) => {
+// Improved noise detection with Whisper's no_speech_prob
+const isLikelyNoise = (text, { wakeWordEnabled, noSpeechProb } = {}) => {
+  // If Whisper is confident there's no speech, filter it out
+  if (typeof noSpeechProb === 'number' && noSpeechProb > 0.6) {
+    return true;
+  }
+
   const cleaned = stripPunctuation(text);
   if (!cleaned) return true;
 
   const words = cleaned.split(' ').filter(Boolean);
-  const fillers = new Set(['um', 'uh', 'erm', 'hmm', 'mm', 'mhm', 'ah']);
+  
+  // Filter filler words only
+  const fillers = new Set(['um', 'uh', 'erm', 'hmm', 'mm', 'mhm', 'ah', 'huh']);
   if (words.length > 0 && words.every((w) => fillers.has(w))) return true;
 
-  // Filter obvious boilerplate hallucinations that show up in noisy STT.
+  // Filter obvious hallucinations from Whisper
   const lower = cleaned.toLowerCase();
-  if (/thanks? for watching|subscribe|like and subscribe/.test(lower)) return true;
+  const hallucinations = [
+    /thanks? for watching/,
+    /subscribe/,
+    /like and subscribe/,
+    /please subscribe/,
+    /see you next time/,
+    /bye bye/,
+    /thank you for listening/,
+    /\[music\]/,
+    /\[applause\]/,
+    /\(music\)/,
+  ];
+  if (hallucinations.some(re => re.test(lower))) return true;
 
-  // Too repetitive (often fan/static gets transcribed as repeated short tokens).
+  // Too repetitive (often noise gets transcribed as repeated tokens)
   const uniqueRatio = words.length ? (new Set(words).size / words.length) : 0;
-  if (words.length >= 5 && uniqueRatio < 0.45) return true;
+  if (words.length >= 6 && uniqueRatio < 0.35) return true;
 
-  // Require enough real letters to be a meaningful command.
+  // Require minimum letters for meaningful content
   const lettersOnly = cleaned.replace(/[^a-z]/g, '');
-  const minLetters = wakeWordEnabled ? 4 : 7;
+  const minLetters = wakeWordEnabled ? 3 : 5;
   if (lettersOnly.length < minLetters) return true;
-
-  const stopwords = new Set([
-    'a', 'an', 'the', 'please', 'hey', 'hi', 'hello', 'ok', 'okay', 'yeah', 'yes', 'no',
-  ]);
-  const contentWords = words.filter((w) => w.length >= 3 && !stopwords.has(w));
-  const minContentWords = wakeWordEnabled ? 1 : 2;
-  if (contentWords.length < minContentWords) return true;
 
   return false;
 };
@@ -60,9 +77,10 @@ const pickBestEnglishVoice = (voices) => {
   const preferredMatchers = [
     /Google UK English Female/i,
     /Google US English/i,
+    /Samantha/i,
+    /Karen/i,
     /female/i,
     /Zira/i,
-    /Samantha/i,
   ];
 
   for (const re of preferredMatchers) {
@@ -85,9 +103,9 @@ const getWakeWordVariants = () => {
   const wake = getWakeWord();
   if (!wake) return [];
 
-  // Chromium/Groq Whisper can transcribe "AERA" as "era" / "aira" / "aero".
+  // Common Whisper transcription variants for "AERA"
   if (wake === 'aera') {
-    return ['aera', 'era', 'aira', 'airah', 'aero', 'air a', 'a e r a'];
+    return ['aera', 'era', 'aira', 'airah', 'aero', 'air a', 'a e r a', 'aira', 'aera', 'eira', 'ara'];
   }
 
   return [wake];
@@ -102,15 +120,15 @@ const applyWakeWord = (text) => {
   const cleaned = stripPunctuation(text);
   const variants = getWakeWordVariants().map(escapeRegExp).join('|');
 
-  // Best-case: wake word at the beginning.
-  const startRe = new RegExp(`^(?:(?:hey|hi|hello|ok|okay)\\s+)?(?:${variants})\\b\\s*(.*)$`);
+  // Wake word at the beginning (with optional greeting prefix)
+  const startRe = new RegExp(`^(?:(?:hey|hi|hello|ok|okay)\\s+)?(?:${variants})\\b\\s*(.*)$`, 'i');
   const startMatch = cleaned.match(startRe);
   if (startMatch) {
     const remainder = (startMatch[1] || '').trim();
     return { ok: true, prompt: remainder, wakeOnly: remainder.length === 0, wakeEnabled: true };
   }
 
-  // Fallback: wake word appears later (STT sometimes prefixes filler/noise words).
+  // Wake word anywhere in the text (fallback for noisy prefix)
   const anywhereRe = new RegExp(`\\b(?:${variants})\\b`, 'i');
   const anywhereMatch = cleaned.match(anywhereRe);
   if (!anywhereMatch || typeof anywhereMatch.index !== 'number') {
@@ -132,6 +150,7 @@ const pickRecorderMimeType = () => {
     'audio/webm',
     'audio/ogg;codecs=opus',
     'audio/ogg',
+    'audio/mp4',
   ];
 
   return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || '';
@@ -161,11 +180,11 @@ const VoiceAgent = () => {
   const recordingStartedAtRef = useRef(0);
   const silenceSinceRef = useRef(null);
   const cancelRecordingRef = useRef(false);
+  const speechDetectedRef = useRef(false);
 
   const cooldownUntilRef = useRef(0);
-  const noiseFloorRef = useRef(num(process.env.REACT_APP_VAD_NOISE_FLOOR_INIT, 0.008));
-  const aboveStartSinceRef = useRef(null);
-  const armSilenceSinceRef = useRef(null);
+  const noiseFloorRef = useRef(0.01);
+  const rmsHistoryRef = useRef([]);
 
   const voiceRef = useRef(null);
   const conversationRef = useRef([
@@ -177,7 +196,6 @@ const VoiceAgent = () => {
   const pushMessage = (msg) => {
     const history = conversationRef.current;
     history.push(msg);
-    // Keep system + last N messages to control token growth.
     const MAX_MESSAGES = 14;
     if (history.length > MAX_MESSAGES) {
       conversationRef.current = [history[0], ...history.slice(-MAX_MESSAGES + 1)];
@@ -188,7 +206,6 @@ const VoiceAgent = () => {
     const msg = toCleanText(message);
     if (msg) setErrorLine(msg);
     if (debug) {
-      // eslint-disable-next-line no-console
       console.error('[AERA voice] error:', msg, err);
     }
   };
@@ -213,8 +230,8 @@ const VoiceAgent = () => {
     if (voiceRef.current) {
       utter.voice = voiceRef.current;
     }
-    utter.rate = 1.02;
-    utter.pitch = 1.06;
+    utter.rate = 1.0;
+    utter.pitch = 1.0;
     utter.volume = 1;
 
     utter.onend = () => {
@@ -301,13 +318,29 @@ const VoiceAgent = () => {
     cooldownUntilRef.current = Math.max(cooldownUntilRef.current || 0, until);
   };
 
+  // Update adaptive noise floor
+  const updateNoiseFloor = (rms) => {
+    const history = rmsHistoryRef.current;
+    history.push(rms);
+    if (history.length > 50) {
+      history.shift();
+    }
+    
+    // Use the 20th percentile as noise floor estimate
+    const sorted = [...history].sort((a, b) => a - b);
+    const idx = Math.floor(sorted.length * 0.2);
+    const newFloor = sorted[idx] || 0.01;
+    
+    // Smooth the noise floor
+    noiseFloorRef.current = noiseFloorRef.current * 0.95 + newFloor * 0.05;
+  };
+
   const pauseAndSpeak = async (reply) => {
     shouldRunRef.current = false;
     stopRecording({ cancel: true });
 
     await speak(reply);
 
-    // Extra guard against immediately re-triggering on room noise / TTS tail.
     setCooldown(POST_TTS_COOLDOWN_MS);
 
     setTimeout(() => {
@@ -319,8 +352,17 @@ const VoiceAgent = () => {
   };
 
   const handleBlob = async (blob, durationMs) => {
-    if (!blob || durationMs < num(process.env.REACT_APP_MIN_RECORD_MS, 450)) {
-      setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 650));
+    // Filter out recordings that are too short or didn't have enough speech energy
+    if (!blob || durationMs < MIN_RECORDING_MS) {
+      setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 500));
+      busyRef.current = false;
+      setStatus('listening');
+      return;
+    }
+
+    // Check if we detected actual speech during recording
+    if (!speechDetectedRef.current) {
+      setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 400));
       busyRef.current = false;
       setStatus('listening');
       return;
@@ -328,80 +370,98 @@ const VoiceAgent = () => {
 
     setStatus('transcribing');
 
-    let transcript = '';
+    let sttResult;
     try {
-      transcript = toCleanText(await transcribeAudio(blob));
+      sttResult = await transcribeAudio(blob);
+      const transcript = toCleanText(typeof sttResult === 'string' ? sttResult : sttResult?.text || '');
       setLastTranscript(transcript);
       setTraceLine(transcript ? `STT: ${transcript}` : 'STT: (empty)');
       setErrorLine('');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 900));
-      setError(`STT error: ${message}`, err);
-      busyRef.current = false;
-      setStatus('listening');
-      return;
-    }
 
-    const wakeApplied = applyWakeWord(transcript);
-    if (!wakeApplied.ok) {
-      setCooldown(num(process.env.REACT_APP_VAD_WAKE_MISS_COOLDOWN_MS, 1400));
-      setTraceLine(transcript ? `Wake miss: ${transcript}` : 'Wake miss: (empty)');
-      if (debug) {
-        // eslint-disable-next-line no-console
-        console.debug('[AERA voice] wake word not detected:', transcript);
+      // Check no_speech_prob from Whisper
+      const noSpeechProb = sttResult?.noSpeechProb;
+      if (typeof noSpeechProb === 'number' && noSpeechProb > 0.7) {
+        setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 600));
+        setTraceLine(`Filtered: no_speech_prob=${noSpeechProb.toFixed(2)}`);
+        busyRef.current = false;
+        setStatus('listening');
+        return;
       }
-      busyRef.current = false;
-      setStatus('listening');
-      return;
-    }
 
-    const prompt = toCleanText(wakeApplied.prompt);
-    setLastPrompt(prompt);
-    setTraceLine(wakeApplied.wakeOnly ? 'Wake-only' : `Prompt: ${prompt}`);
+      if (!transcript) {
+        setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 500));
+        busyRef.current = false;
+        setStatus('listening');
+        return;
+      }
 
-    if (wakeApplied.wakeOnly) {
+      const wakeApplied = applyWakeWord(transcript);
+      if (!wakeApplied.ok) {
+        setCooldown(num(process.env.REACT_APP_VAD_WAKE_MISS_COOLDOWN_MS, 800));
+        setTraceLine(transcript ? `Wake miss: ${transcript}` : 'Wake miss: (empty)');
+        if (debug) {
+          console.debug('[AERA voice] wake word not detected:', transcript);
+        }
+        busyRef.current = false;
+        setStatus('listening');
+        return;
+      }
+
+      const prompt = toCleanText(wakeApplied.prompt);
+      setLastPrompt(prompt);
+      setTraceLine(wakeApplied.wakeOnly ? 'Wake-only' : `Prompt: ${prompt}`);
+
+      if (wakeApplied.wakeOnly) {
+        window.dispatchEvent(new Event('aera-conversation-start'));
+        try {
+          await pauseAndSpeak('Yes? How can I help?');
+        } finally {
+          window.dispatchEvent(new Event('aera-conversation-end'));
+          busyRef.current = false;
+          setStatus('listening');
+        }
+        return;
+      }
+
+      if (isLikelyNoise(prompt, { 
+        wakeWordEnabled: wakeApplied.wakeEnabled, 
+        noSpeechProb: sttResult?.noSpeechProb 
+      })) {
+        setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 800));
+        setTraceLine(prompt ? `Ignored: ${prompt}` : 'Ignored: (empty)');
+        if (debug) {
+          console.debug('[AERA voice] ignored noise:', prompt);
+        }
+        busyRef.current = false;
+        setStatus('listening');
+        return;
+      }
+
       window.dispatchEvent(new Event('aera-conversation-start'));
+      setStatus('thinking');
+      pushMessage({ role: 'user', content: prompt });
+
       try {
-        await pauseAndSpeak('Yes?');
+        const reply = await chatCompletions(conversationRef.current);
+        pushMessage({ role: 'assistant', content: reply });
+        setLastReply(reply);
+        setTraceLine(`Reply: ${toCleanText(reply).slice(0, 120)}`);
+        setErrorLine('');
+        await pauseAndSpeak(reply);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setLastReply('');
+        setError(`LLM error: ${message}`, err);
+        await pauseAndSpeak(`Sorry, I couldn't process that. Please try again.`);
       } finally {
         window.dispatchEvent(new Event('aera-conversation-end'));
         busyRef.current = false;
         setStatus('listening');
       }
-      return;
-    }
-
-    if (isLikelyNoise(prompt, { wakeWordEnabled: wakeApplied.wakeEnabled })) {
-      setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 1200));
-      setTraceLine(prompt ? `Ignored: ${prompt}` : 'Ignored: (empty)');
-      if (debug) {
-        // eslint-disable-next-line no-console
-        console.debug('[AERA voice] ignored noise:', prompt);
-      }
-      busyRef.current = false;
-      setStatus('listening');
-      return;
-    }
-
-    window.dispatchEvent(new Event('aera-conversation-start'));
-    setStatus('thinking');
-    pushMessage({ role: 'user', content: prompt });
-
-    try {
-      const reply = await chatCompletions(conversationRef.current);
-      pushMessage({ role: 'assistant', content: reply });
-      setLastReply(reply);
-      setTraceLine(`Reply: ${toCleanText(reply).slice(0, 120)}`);
-      setErrorLine('');
-      await pauseAndSpeak(reply);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setLastReply('');
-      setError(`LLM error: ${message}`, err);
-      await pauseAndSpeak(`Sorry, I hit an error: ${message}`);
-    } finally {
-      window.dispatchEvent(new Event('aera-conversation-end'));
+      setCooldown(num(process.env.REACT_APP_VAD_REJECT_COOLDOWN_MS, 900));
+      setError(`STT error: ${message}`, err);
       busyRef.current = false;
       setStatus('listening');
     }
@@ -430,6 +490,7 @@ const VoiceAgent = () => {
     recordingStartedAtRef.current = Date.now();
     silenceSinceRef.current = null;
     cancelRecordingRef.current = false;
+    speechDetectedRef.current = false;
 
     rec.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) {
@@ -454,6 +515,7 @@ const VoiceAgent = () => {
 
       if (cancelled) {
         busyRef.current = false;
+        speechDetectedRef.current = false;
         if (!isSpeakingRef.current) {
           setStatus('listening');
         }
@@ -468,7 +530,7 @@ const VoiceAgent = () => {
     mediaRecorderRef.current = rec;
 
     try {
-      rec.start(250);
+      rec.start(200);
       setStatus('hearing');
     } catch (err) {
       setError('Failed to start recording', err);
@@ -479,13 +541,20 @@ const VoiceAgent = () => {
   const startVadLoop = () => {
     stopVadLoop();
 
-    // Default to a simple, reliable VAD so we don't clip words (which makes STT "guess").
-    // If you want the adaptive noise-floor behavior, set REACT_APP_VAD_ADAPTIVE=true.
-    const adaptive = String(process.env.REACT_APP_VAD_ADAPTIVE || '') === 'true';
+    // Adaptive thresholds based on noise floor
+    const getStartThreshold = () => {
+      const base = num(process.env.REACT_APP_VAD_START_RMS, 0.04);
+      const noiseFloor = noiseFloorRef.current || 0.01;
+      return Math.max(base, noiseFloor * 3.0);
+    };
 
-    const startThreshold = num(process.env.REACT_APP_VAD_START_RMS, 0.03);
-    const stopThreshold = num(process.env.REACT_APP_VAD_STOP_RMS, 0.017);
-    const maxRecordMs = num(process.env.REACT_APP_MAX_RECORD_MS, 12000);
+    const getStopThreshold = () => {
+      const base = num(process.env.REACT_APP_VAD_STOP_RMS, 0.02);
+      const noiseFloor = noiseFloorRef.current || 0.01;
+      return Math.max(base, noiseFloor * 1.8);
+    };
+
+    const maxRecordMs = num(process.env.REACT_APP_MAX_RECORD_MS, 15000);
 
     vadTimerRef.current = setInterval(() => {
       if (!shouldRunRef.current) {
@@ -495,49 +564,42 @@ const VoiceAgent = () => {
       const rec = mediaRecorderRef.current;
       const isRec = rec && rec.state === 'recording';
 
-      // Never record while speaking.
+      // Never record while speaking
       if (isSpeakingRef.current) {
-        aboveStartSinceRef.current = null;
-        armSilenceSinceRef.current = null;
         if (isRec) stopRecording({ cancel: true });
         return;
       }
 
-      // If we're transcribing/thinking, don't start a new recording.
+      // If transcribing/thinking, don't start new recording
       if (busyRef.current) {
-        aboveStartSinceRef.current = null;
-        armSilenceSinceRef.current = null;
         if (isRec) stopRecording({ cancel: true });
         return;
       }
 
       const rms = computeRms();
+      
+      // Update noise floor when not recording
+      if (!isRec) {
+        updateNoiseFloor(rms);
+      }
+
       try {
         window.dispatchEvent(new CustomEvent('aera-mic-rms', { detail: { rms } }));
       } catch (_err) {
         // ignore
       }
+
       const now = Date.now();
-
-      // Optional: maintain an adaptive noise floor while idle.
-      if (adaptive && !isRec) {
-        const nf0 = typeof noiseFloorRef.current === 'number' ? noiseFloorRef.current : 0.008;
-        if (rms > 0 && rms <= stopThreshold * 1.6) {
-          const next = (nf0 * 0.985) + (rms * 0.015);
-          noiseFloorRef.current = Math.max(0.0005, Math.min(0.08, next));
-        }
-      }
-
-      const noiseFloor = adaptive && typeof noiseFloorRef.current === 'number' ? noiseFloorRef.current : 0;
-      const dynamicStart = adaptive ? Math.max(startThreshold, noiseFloor * 2.0, noiseFloor + 0.006) : startThreshold;
-      const dynamicStop = adaptive ? Math.max(stopThreshold, noiseFloor * 1.4, noiseFloor + 0.003) : stopThreshold;
+      const startThreshold = getStartThreshold();
+      const stopThreshold = getStopThreshold();
 
       if (!isRec) {
         if (now < (cooldownUntilRef.current || 0)) {
           return;
         }
 
-        if (rms >= dynamicStart) {
+        // Start recording if RMS exceeds threshold
+        if (rms >= startThreshold) {
           startRecording();
         }
         return;
@@ -545,6 +607,8 @@ const VoiceAgent = () => {
 
       const startedAt = recordingStartedAtRef.current || now;
       const elapsed = now - startedAt;
+
+      // Max recording duration
       if (elapsed >= maxRecordMs) {
         setStatus('transcribing');
         busyRef.current = true;
@@ -552,8 +616,19 @@ const VoiceAgent = () => {
         return;
       }
 
-      if (rms >= dynamicStop) {
+      // Track if we've detected clear speech during this recording
+      if (rms >= startThreshold * 0.8) {
+        speechDetectedRef.current = true;
+      }
+
+      // Check for silence to end recording
+      if (rms >= stopThreshold) {
         silenceSinceRef.current = null;
+        return;
+      }
+
+      // Need minimum recording before we check for silence
+      if (elapsed < MIN_SPEECH_DURATION_MS) {
         return;
       }
 
@@ -590,6 +665,8 @@ const VoiceAgent = () => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 16000,
         },
         video: false,
       });
@@ -625,6 +702,7 @@ const VoiceAgent = () => {
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.3;
     source.connect(analyser);
 
     analyserRef.current = analyser;
@@ -714,7 +792,9 @@ const VoiceAgent = () => {
       ? '#ffd60a'
       : statusLower.includes('speaking')
         ? '#0a84ff'
-        : '#30d158';
+        : statusLower.includes('hearing')
+          ? '#ff9500'
+          : '#30d158';
 
   return (
     <div
@@ -743,12 +823,13 @@ const VoiceAgent = () => {
             borderRadius: 999,
             background: dotColor,
             flex: '0 0 auto',
+            animation: statusLower.includes('hearing') ? 'pulse 0.5s ease-in-out infinite' : 'none',
           }}
         />
         {showOverlayText ? (
           <span>
             {needsGesture ? 'Tap/click once to enable voice + microphone permissions' : `Voice: ${status}`}
-            {getWakeWord() ? ` (wake: ${getWakeWord()})` : ''}
+            {getWakeWord() ? ` (say "${getWakeWord()}" to activate)` : ''}
           </span>
         ) : null}
       </div>
@@ -767,6 +848,13 @@ const VoiceAgent = () => {
           {debug ? <div>Last reply: {(lastReply || '(none)').slice(0, 160)}</div> : null}
         </div>
       ) : null}
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.2); }
+        }
+      `}</style>
     </div>
   );
 };
