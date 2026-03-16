@@ -5,11 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LAUNCH_SCRIPT="${SCRIPT_DIR}/start-aera-kiosk.sh"
 
 AERA_URL_DEFAULT="${1:-https://aerasmartmirror.netlify.app/}"
-CHATGPT_URL_DEFAULT="${2:-https://chatgpt.com/}"
 
-echo "Installing kiosk helpers (xdotool/unclutter)..."
+echo "Installing kiosk helpers (unclutter)..."
 sudo apt-get update
-sudo apt-get install -y xdotool unclutter
+sudo apt-get install -y unclutter
 
 chmod +x "${LAUNCH_SCRIPT}"
 
@@ -23,8 +22,8 @@ cat > "${DESKTOP_FILE}" <<EOF
 Version=1.0
 Type=Application
 Name=AERA Kiosk
-Comment=Open AERA + ChatGPT in kiosk mode
-Exec=env AERA_URL=${AERA_URL_DEFAULT} CHATGPT_URL=${CHATGPT_URL_DEFAULT} /bin/bash ${LAUNCH_SCRIPT}
+Comment=Open AERA in kiosk mode
+Exec=env AERA_URL=${AERA_URL_DEFAULT} /bin/bash ${LAUNCH_SCRIPT}
 Icon=chromium-browser
 Terminal=false
 Categories=Utility;
@@ -42,6 +41,5 @@ echo "Desktop shortcut created:"
 echo "  ${DESKTOP_FILE}"
 echo
 echo "Double-click 'AERA Kiosk' on Desktop to launch."
-echo "URL values used:"
-echo "  AERA:    ${AERA_URL_DEFAULT}"
-echo "  ChatGPT: ${CHATGPT_URL_DEFAULT}"
+echo "URL value used:"
+echo "  AERA: ${AERA_URL_DEFAULT}"

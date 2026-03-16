@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Default URLs can be overridden via environment variables.
+# Default URL can be overridden via environment variable.
 AERA_URL="${AERA_URL:-https://aerasmartmirror.netlify.app/}"
-CHATGPT_URL="${CHATGPT_URL:-https://chatgpt.com/}"
 DISPLAY_VAR="${DISPLAY:-:0}"
 XAUTH_VAR="${XAUTHORITY:-${HOME}/.Xauthority}"
 
@@ -18,7 +17,6 @@ else
 fi
 
 PROFILE_DIR="${HOME}/.config/chromium-aera-kiosk"
-
 mkdir -p "${PROFILE_DIR}"
 
 # Hide cursor after short idle if available.
@@ -46,13 +44,4 @@ DISPLAY="${DISPLAY_VAR}" XAUTHORITY="${XAUTH_VAR}" "${CHROMIUM_BIN}" \
   --disable-renderer-backgrounding \
   --check-for-update-interval=31536000 \
   --autoplay-policy=no-user-gesture-required \
-  "${AERA_URL}" "${CHATGPT_URL}" &
-
-# Force focus to tab 1 (AERA) so ChatGPT stays in background tab.
-if command -v xdotool >/dev/null 2>&1; then
-  sleep 5
-  WINDOW_ID="$(DISPLAY="${DISPLAY_VAR}" XAUTHORITY="${XAUTH_VAR}" xdotool search --onlyvisible --class chromium | head -n 1 || true)"
-  if [[ -n "${WINDOW_ID}" ]]; then
-    DISPLAY="${DISPLAY_VAR}" XAUTHORITY="${XAUTH_VAR}" xdotool windowactivate "${WINDOW_ID}" key --window "${WINDOW_ID}" ctrl+1
-  fi
-fi
+  "${AERA_URL}" &

@@ -9,6 +9,7 @@ const AUDIO_LEVEL_SMOOTHING = 0.28;
 const AUDIO_LEVEL_INTERVAL_MS = 80;
 const AUDIO_ACTIVITY_THRESHOLD = 0.06;
 const AUDIO_ACTIVITY_HOLD_MS = 650;
+const DASHBOARD_AUDIO_ENABLED = String(process.env.REACT_APP_DASHBOARD_AUDIO || '') === 'true';
 
 const ThermometerIcon = () => (
   <svg className="status-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -52,11 +53,11 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
   const [audioPeakPercent, setAudioPeakPercent] = useState(0);
   const [audioSourceLabel, setAudioSourceLabel] = useState('Not connected');
   const [isAudioActive, setIsAudioActive] = useState(false);
-  const [, setAudioStatus] = useState('System audio will be requested automatically');
+  const [, setAudioStatus] = useState('Audio will be requested automatically');
   const [needsAudioGestureRetry, setNeedsAudioGestureRetry] = useState(false);
 
   const audioCaptureSupported =
-    typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getDisplayMedia);
+    typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
 
   const toggleTempUnit = useCallback(() => {
     setTempUnit((prev) => (prev === 'C' ? 'F' : 'C'));
@@ -111,36 +112,37 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
     }
 
     if (!active) {
-      setAudioStatus('Unlock dashboard before requesting system audio');
+      setAudioStatus('Unlock dashboard before requesting microphone access');
+      return;
+    }
+
+    // Default: do NOT request an extra mic stream (it can fight the VoiceAgent for access).
+    // When disabled, the orb will react using the RMS feed emitted by VoiceAgent.
+    if (!DASHBOARD_AUDIO_ENABLED) {
+      setAudioSourceLabel('VoiceAgent');
+      setAudioStatus('Audio meter using VoiceAgent feed');
       return;
     }
 
     if (!audioCaptureSupported) {
-      setAudioStatus('This browser does not support system audio capture');
+      setAudioStatus('This browser does not support microphone capture');
       return;
     }
 
     setNeedsAudioGestureRetry(false);
     audioRequestInFlightRef.current = true;
-    stopAudioCapture('Requesting system audio...', false);
-    setAudioStatus('Requesting system audio. Choose Entire Screen and enable Share system audio.');
+    stopAudioCapture('Requesting microphone...', false);
+    setAudioStatus('Requesting microphone access...');
 
     let stream;
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          frameRate: { ideal: 5, max: 10 },
-        },
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: false,
         audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          suppressLocalAudioPlayback: false,
-          channelCount: 2,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
         },
-        selfBrowserSurface: 'exclude',
-        preferCurrentTab: false,
-        systemAudio: 'include',
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'capture request canceled';
@@ -148,9 +150,9 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
         || /gesture|user activation|interact|permission/i.test(message);
       if (looksLikeGestureBlock) {
         setNeedsAudioGestureRetry(true);
-        setAudioStatus('System audio requires one click/key press. Interact once to retry.');
+        setAudioStatus('Microphone requires one click/key press. Interact once to retry.');
       } else {
-        setAudioStatus(`System audio unavailable - ${message}`);
+        setAudioStatus(`Microphone unavailable - ${message}`);
       }
       audioRequestInFlightRef.current = false;
       return;
@@ -159,7 +161,7 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
     const audioTracks = stream.getAudioTracks();
     if (audioTracks.length === 0) {
       stream.getTracks().forEach((track) => track.stop());
-      setAudioStatus('No system audio track was shared. Select Entire Screen and enable Share system audio.');
+      setAudioStatus('No microphone audio track was provided.');
       audioRequestInFlightRef.current = false;
       return;
     }
@@ -177,16 +179,12 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
       await context.resume().catch(() => {});
     }
 
-    stream.getVideoTracks().forEach((track) => {
-      track.enabled = false;
-    });
-
     const source = context.createMediaStreamSource(new MediaStream(audioTracks));
     const analyser = context.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.85;
     source.connect(analyser);
-    const sourceLabel = audioTracks[0]?.label?.trim() || 'Shared system source';
+    const sourceLabel = audioTracks[0]?.label?.trim() || 'Microphone';
     setAudioSourceLabel(sourceLabel);
     setAudioPeakPercent(0);
     audioLastActiveAtRef.current = 0;
@@ -242,7 +240,7 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
     };
 
     audioRequestInFlightRef.current = false;
-    setAudioStatus(`System audio connected: ${sourceLabel}`);
+    setAudioStatus(`Microphone connected: ${sourceLabel}`);
   }, [active, audioCaptureSupported, stopAudioCapture]);
 
   // =========================
@@ -296,8 +294,14 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
       return;
     }
 
+    if (!DASHBOARD_AUDIO_ENABLED) {
+      setAudioSourceLabel('VoiceAgent');
+      setAudioStatus('Audio meter using VoiceAgent feed');
+      return;
+    }
+
     if (!audioCaptureSupported) {
-      setAudioStatus('This browser does not support system audio capture');
+      setAudioStatus('This browser does not support microphone capture');
       return;
     }
 
@@ -306,6 +310,37 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
       startAudioCapture();
     }
   }, [active, audioCaptureSupported, startAudioCapture]);
+
+  // When dashboard audio is disabled, drive the orb from the VoiceAgent RMS feed.
+  useEffect(() => {
+    if (!active || DASHBOARD_AUDIO_ENABLED) {
+      return undefined;
+    }
+
+    const onRms = (event) => {
+      const rms = Number(event?.detail?.rms || 0);
+      const normalized = Math.max(0, Math.min(1, rms * AUDIO_LEVEL_SCALE));
+      const levelPercent = Math.round(normalized * 100);
+      const now = Date.now();
+
+      if (normalized >= AUDIO_ACTIVITY_THRESHOLD) {
+        audioLastActiveAtRef.current = now;
+        setIsAudioActive((prev) => (prev ? prev : true));
+      } else if (
+        audioLastActiveAtRef.current > 0
+        && now - audioLastActiveAtRef.current >= AUDIO_ACTIVITY_HOLD_MS
+      ) {
+        setIsAudioActive((prev) => (prev ? false : prev));
+      }
+
+      setAudioLevelPercent((prev) => (prev !== levelPercent ? levelPercent : prev));
+      setAudioPeakPercent((prev) => (levelPercent > prev ? levelPercent : prev));
+      setOrbLevel((prev) => (prev * (1 - AUDIO_LEVEL_SMOOTHING)) + (normalized * AUDIO_LEVEL_SMOOTHING));
+    };
+
+    window.addEventListener('aera-mic-rms', onRms);
+    return () => window.removeEventListener('aera-mic-rms', onRms);
+  }, [active]);
 
   useEffect(() => {
     if (!active || !needsAudioGestureRetry) {

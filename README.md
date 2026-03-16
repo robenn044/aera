@@ -42,15 +42,35 @@ After deploy, Netlify gives you an HTTPS URL (required for camera APIs).
 
 ## Important Browser Requirements
 
-- Camera and display capture need HTTPS (Netlify provides this by default).
-- System audio sharing depends on browser support and user permission.
+- Camera + microphone access need HTTPS (Netlify provides this by default).
+- AERA no longer uses screen/window capture (`getDisplayMedia`), so the screen-share picker will not appear.
 - For best compatibility, run in the latest Chromium-based browser.
 
-## Raspberry Pi Kiosk + Hidden ChatGPT Voice Tab
+## Voice Assistant (Deployed)
 
-This setup opens:
-- Tab 1: AERA (visible kiosk screen)
-- Tab 2: ChatGPT (background tab for voice conversation audio)
+AERA includes an always-listening, Siri-like voice loop:
+- Speech-to-text: **Groq Whisper** via `netlify/functions/transcribe.js`
+- LLM: Groq chat completions via `netlify/functions/chat.js`
+- Text-to-speech: browser `speechSynthesis` (auto-picks the best available English voice)
+
+### Netlify env vars (server-side)
+
+Set these in Netlify → Site settings → Environment variables:
+- `GROQ_API_KEY` (required)
+- `GROQ_MODEL` (optional, default: `llama-3.1-8b-instant`)
+- `GROQ_STT_MODEL` (optional, default: `whisper-large-v3`)
+- `GROQ_STT_LANGUAGE` (optional, default: `en`)
+- `GROQ_STT_TEMPERATURE` (optional, default: `0`)
+- `GROQ_BASE_URL` (optional, default: `https://api.groq.com/openai/v1`)
+
+### Frontend env vars (build-time)
+
+These are **REACT_APP_** build variables:
+- `REACT_APP_WAKE_WORD` (default wake word is `aera`; set to `off` to disable)
+- `REACT_APP_VOICE_DEBUG=true` to show a small on-screen voice status overlay + last transcript
+- `REACT_APP_DASHBOARD_AUDIO=true` (optional) to let the dashboard request its own mic stream (not recommended; can fight VoiceAgent for mic access)
+
+## Raspberry Pi Kiosk
 
 ### 1) On the Pi, clone/open this repo
 
@@ -62,29 +82,13 @@ cd ~/aera
 
 ```bash
 chmod +x pi/kiosk/install-desktop-shortcut.sh
-./pi/kiosk/install-desktop-shortcut.sh "https://aerasmartmirror.netlify.app/" "https://chatgpt.com/"
+./pi/kiosk/install-desktop-shortcut.sh "https://aerasmartmirror.netlify.app/"
 ```
 
 This installs helper tools and creates:
 - `~/Desktop/AERA Kiosk.desktop`
 
-### 3) Launch from Desktop
-
-Double-click `AERA Kiosk` on Desktop.
-
-### 4) One-time ChatGPT preparation
-
-1. Switch to ChatGPT tab (`Ctrl+2`).
-2. Sign in to ChatGPT.
-3. Start Voice mode.
-4. Return to AERA (`Ctrl+1`).
-
-Now AERA stays visible while ChatGPT runs in the background tab.
-
-### Notes
-
-- Background tabs can be throttled by browser policies; if voice pauses, briefly switch to tab 2 and back.
-- If kiosk ever fails, run manually:
+### Manual start
 
 ```bash
 bash ~/aera/pi/kiosk/start-aera-kiosk.sh
