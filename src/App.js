@@ -3,7 +3,7 @@ import * as tf from '@tensorflow/tfjs';
 import * as blazeface from '@tensorflow-models/blazeface';
 import LockScreen from './LockScreen';
 import Dashboard from './Dashboard';
-import VoiceAgent from './VoiceAgent';
+import { fetchRemoteCommands, getCommandDefaults, normalizeChannel } from './remoteControl';
 import './App.css';
 
 const AUTO_LOCK_MS = 60 * 1000;
@@ -28,6 +28,14 @@ const BLAZEFACE_CONFIG = {
   iouThreshold: 0.3,
   scoreThreshold: FACE_SCORE_THRESHOLD,
 };
+const toNumber = (value, fallback) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+const REMOTE_CONTROL_ENABLED = String(process.env.REACT_APP_REMOTE_CONTROL || '') !== 'false';
+const COMMAND_POLL_MS = toNumber(process.env.REACT_APP_COMMANDS_POLL_MS, 900);
+const COMMAND_BATCH_SIZE = Math.max(1, Math.min(toNumber(process.env.REACT_APP_COMMANDS_BATCH, 12), 50));
+const COMMAND_DEFAULTS = getCommandDefaults();
 
 let detectorModelPromise = null;
 let tensorflowBackendPromise = null;
@@ -80,8 +88,8 @@ function App() {
   const setFaceStatus = () => {};
   const [cameraStream, setCameraStream] = useState(null);
   const autoLockTimeoutRef = useRef(null);
-  const conversationActiveRef = useRef(false);
   const unlockCooldownRef = useRef(false);
+  const scriptAudioRef = useRef({});
 
   const clearAutoLock = useCallback(() => {
     if (autoLockTimeoutRef.current) {
@@ -92,9 +100,6 @@ function App() {
 
   const resetAutoLockTimer = useCallback(() => {
     clearAutoLock();
-    if (conversationActiveRef.current) {
-      return;
-    }
     autoLockTimeoutRef.current = setTimeout(() => {
       setIsLocked(true);
     }, AUTO_LOCK_MS);
@@ -104,6 +109,59 @@ function App() {
     setIsLocked(false);
     resetAutoLockTimer();
   }, [resetAutoLockTimer]);
+
+
+  const scriptAudioMap = useCallback(() => ({
+    'script-1': String(process.env.REACT_APP_SCRIPT_AUDIO_1 || '/audio/script-1.mp3'),
+    'script-2': String(process.env.REACT_APP_SCRIPT_AUDIO_2 || '/audio/script-2.mp3'),
+    'script-intro': String(process.env.REACT_APP_SCRIPT_AUDIO_3 || '/audio/script-3.mp3'),
+  }), []);
+
+  const getScriptAudio = useCallback((src) => {
+    const registry = scriptAudioRef.current;
+    if (!registry[src]) {
+      const audio = new Audio(src);
+      audio.preload = 'auto';
+      registry[src] = audio;
+    }
+    return registry[src];
+  }, []);
+
+  const playScriptAudio = useCallback(async (key) => {
+    const map = scriptAudioMap();
+    const src = map[key];
+    if (!src) {
+      return false;
+    }
+    const audio = getScriptAudio(src);
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+      await audio.play();
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }, [getScriptAudio, scriptAudioMap]);
+
+  useEffect(() => {
+    const primeAudio = () => {
+      const map = scriptAudioMap();
+      Object.values(map).forEach((src) => {
+        if (!src) return;
+        const audio = getScriptAudio(src);
+        audio.load();
+      });
+    };
+    window.addEventListener('pointerdown', primeAudio);
+    window.addEventListener('keydown', primeAudio);
+    window.addEventListener('touchstart', primeAudio);
+    return () => {
+      window.removeEventListener('pointerdown', primeAudio);
+      window.removeEventListener('keydown', primeAudio);
+      window.removeEventListener('touchstart', primeAudio);
+    };
+  }, [getScriptAudio, scriptAudioMap]);
 
   useEffect(() => {
     // Preload once so first lock detection starts faster.
@@ -179,27 +237,12 @@ function App() {
       window.addEventListener(eventName, onActivity, { passive: true });
     });
 
-    const onConversationStart = () => {
-      conversationActiveRef.current = true;
-      clearAutoLock();
-    };
-
-    const onConversationEnd = () => {
-      conversationActiveRef.current = false;
-      resetAutoLockTimer();
-    };
-
-    window.addEventListener('aera-conversation-start', onConversationStart);
-    window.addEventListener('aera-conversation-end', onConversationEnd);
-
     resetAutoLockTimer();
 
     return () => {
       activityEvents.forEach((eventName) => {
         window.removeEventListener(eventName, onActivity);
       });
-      window.removeEventListener('aera-conversation-start', onConversationStart);
-      window.removeEventListener('aera-conversation-end', onConversationEnd);
       clearAutoLock();
     };
   }, [clearAutoLock, isLocked, resetAutoLockTimer]);
@@ -377,11 +420,134 @@ function App() {
     };
   }, [cameraStream, handleUnlock, isLocked]);
 
+  const handleRemoteCommand = useCallback(async (command) => {
+    const type = String(command?.type || '').toLowerCase();
+
+    if (!type) {
+      return;
+    }
+
+    if (type === 'script-1' || type === 'script_line_1') {
+      await playScriptAudio('script-1');
+      return;
+    }
+
+    if (type === 'script-2' || type === 'script_line_2') {
+      await playScriptAudio('script-2');
+      return;
+    }
+
+    if (type === 'script-intro' || type === 'script_intro' || type === 'intro') {
+      await playScriptAudio('script-intro');
+      return;
+    }
+
+    if (type === 'lock') {
+      setIsLocked(true);
+      return;
+    }
+
+    if (type === 'unlock') {
+      setIsLocked(false);
+      resetAutoLockTimer();
+      return;
+    }
+
+    if (type === 'toggle-lock' || type === 'toggle_lock') {
+      setIsLocked((prev) => {
+        const next = !prev;
+        if (!next) {
+          resetAutoLockTimer();
+        }
+        return next;
+      });
+      return;
+    }
+
+    if (type === 'reload') {
+      window.location.reload();
+    }
+  }, [playScriptAudio, resetAutoLockTimer]);
+
+  useEffect(() => {
+    if (!REMOTE_CONTROL_ENABLED) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let timer = null;
+
+    const runPoll = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeout = controller ? setTimeout(() => controller.abort(), 8000) : null;
+
+      try {
+        const searchParams = typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search)
+          : null;
+        const channelOverride = searchParams?.get('channel');
+        const resolvedChannel = normalizeChannel(channelOverride || COMMAND_DEFAULTS.channel);
+        const data = await fetchRemoteCommands({
+          channel: resolvedChannel,
+          endpoint: COMMAND_DEFAULTS.endpoint,
+          limit: COMMAND_BATCH_SIZE,
+          signal: controller ? controller.signal : undefined,
+        });
+        if (Array.isArray(data?.commands)) {
+          for (const cmd of data.commands) {
+            // Process sequentially to preserve audio ordering.
+            // eslint-disable-next-line no-await-in-loop
+            await handleRemoteCommand(cmd);
+          }
+        }
+      } catch (_err) {
+        // Ignore transient polling failures.
+      } finally {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        if (!cancelled) {
+          timer = setTimeout(runPoll, COMMAND_POLL_MS);
+        }
+      }
+    };
+
+    runPoll();
+
+    return () => {
+      cancelled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [handleRemoteCommand]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.repeat) return;
+      const target = event.target;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable) {
+        return;
+      }
+      if (event.code === 'Digit1') {
+        void playScriptAudio('script-1');
+      } else if (event.code === 'Digit2') {
+        void playScriptAudio('script-2');
+      } else if (event.code === 'Digit3') {
+        void playScriptAudio('script-intro');
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [playScriptAudio]);
+
   return (
     <div className="app-container" onClick={isLocked ? handleUnlock : undefined}>
-      {/* Always-on voice assistant (mic + STT + LLM + TTS). */}
-      <VoiceAgent />
-
       {/* 1. The Lock Screen (Top Layer) */}
       <div className={`screen screen-lock ${isLocked ? 'visible' : 'hidden'}`}>
         <LockScreen />

@@ -116,11 +116,10 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
       return;
     }
 
-    // Default: do NOT request an extra mic stream (it can fight the VoiceAgent for access).
-    // When disabled, the orb will react using the RMS feed emitted by VoiceAgent.
+    // Default: do NOT request an extra mic stream unless explicitly enabled.
     if (!DASHBOARD_AUDIO_ENABLED) {
-      setAudioSourceLabel('VoiceAgent');
-      setAudioStatus('Audio meter using VoiceAgent feed');
+      setAudioSourceLabel('Disabled');
+      setAudioStatus('Audio meter disabled');
       return;
     }
 
@@ -295,8 +294,8 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
     }
 
     if (!DASHBOARD_AUDIO_ENABLED) {
-      setAudioSourceLabel('VoiceAgent');
-      setAudioStatus('Audio meter using VoiceAgent feed');
+      setAudioSourceLabel('Disabled');
+      setAudioStatus('Audio meter disabled');
       return;
     }
 
@@ -311,36 +310,7 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
     }
   }, [active, audioCaptureSupported, startAudioCapture]);
 
-  // When dashboard audio is disabled, drive the orb from the VoiceAgent RMS feed.
-  useEffect(() => {
-    if (!active || DASHBOARD_AUDIO_ENABLED) {
-      return undefined;
-    }
-
-    const onRms = (event) => {
-      const rms = Number(event?.detail?.rms || 0);
-      const normalized = Math.max(0, Math.min(1, rms * AUDIO_LEVEL_SCALE));
-      const levelPercent = Math.round(normalized * 100);
-      const now = Date.now();
-
-      if (normalized >= AUDIO_ACTIVITY_THRESHOLD) {
-        audioLastActiveAtRef.current = now;
-        setIsAudioActive((prev) => (prev ? prev : true));
-      } else if (
-        audioLastActiveAtRef.current > 0
-        && now - audioLastActiveAtRef.current >= AUDIO_ACTIVITY_HOLD_MS
-      ) {
-        setIsAudioActive((prev) => (prev ? false : prev));
-      }
-
-      setAudioLevelPercent((prev) => (prev !== levelPercent ? levelPercent : prev));
-      setAudioPeakPercent((prev) => (levelPercent > prev ? levelPercent : prev));
-      setOrbLevel((prev) => (prev * (1 - AUDIO_LEVEL_SMOOTHING)) + (normalized * AUDIO_LEVEL_SMOOTHING));
-    };
-
-    window.addEventListener('aera-mic-rms', onRms);
-    return () => window.removeEventListener('aera-mic-rms', onRms);
-  }, [active]);
+  // No RMS feed when dashboard audio is disabled.
 
   useEffect(() => {
     if (!active || !needsAudioGestureRetry) {
