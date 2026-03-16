@@ -82,7 +82,7 @@ These are **REACT_APP_** build variables:
 - `REACT_APP_SCRIPT_AUDIO_1=/audio/script-1.mp3`
 - `REACT_APP_SCRIPT_AUDIO_2=/audio/script-2.mp3`
 - `REACT_APP_SCRIPT_AUDIO_3=/audio/script-3.mp3`
-- `REACT_APP_DASHBOARD_AUDIO=false` (optional microphone meter)
+- `REACT_APP_DASHBOARD_AUDIO=false` (optional; set to false to disable the microphone level meter)
 
 ## Raspberry Pi Kiosk
 

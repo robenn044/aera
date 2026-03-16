@@ -9,7 +9,9 @@ const AUDIO_LEVEL_SMOOTHING = 0.28;
 const AUDIO_LEVEL_INTERVAL_MS = 80;
 const AUDIO_ACTIVITY_THRESHOLD = 0.06;
 const AUDIO_ACTIVITY_HOLD_MS = 650;
-const DASHBOARD_AUDIO_ENABLED = String(process.env.REACT_APP_DASHBOARD_AUDIO || '') === 'true';
+// Default on: the dashboard mic meter should work even when STT is disabled.
+// Set REACT_APP_DASHBOARD_AUDIO=false to disable if another feature needs the mic.
+const DASHBOARD_AUDIO_ENABLED = String(process.env.REACT_APP_DASHBOARD_AUDIO || '') !== 'false';
 
 const ThermometerIcon = () => (
   <svg className="status-icon" viewBox="0 0 24 24" aria-hidden="true">
