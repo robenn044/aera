@@ -50,9 +50,9 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
   const [orbLevel, setOrbLevel] = useState(0);
   const [audioLevelPercent, setAudioLevelPercent] = useState(0);
   const [audioPeakPercent, setAudioPeakPercent] = useState(0);
-  const [audioSourceLabel, setAudioSourceLabel] = useState('Not connected');
+  const [, setAudioSourceLabel] = useState('Not connected');
   const [isAudioActive, setIsAudioActive] = useState(false);
-  const [audioStatus, setAudioStatus] = useState('Audio will be requested automatically');
+  const [, setAudioStatus] = useState('Audio will be requested automatically');
   const [needsAudioGestureRetry, setNeedsAudioGestureRetry] = useState(false);
 
   const audioCaptureSupported =
