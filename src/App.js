@@ -4,7 +4,11 @@ import * as blazeface from '@tensorflow-models/blazeface';
 import LockScreen from './LockScreen';
 import Dashboard from './Dashboard';
 import VoiceAgent from './VoiceAgent';
+import ScriptMode from './ScriptMode';
 import './App.css';
+
+// Check if we're on the script mode page
+const isScriptMode = window.location.pathname === '/script' || window.location.hash === '#script';
 
 const AUTO_LOCK_MS = 60 * 1000;
 const FACE_DETECT_INTERVAL_MS = 220;
@@ -376,6 +380,11 @@ function App() {
       detectorModel = null;
     };
   }, [cameraStream, handleUnlock, isLocked]);
+
+  // Render Script Mode if on /script path
+  if (isScriptMode) {
+    return <ScriptMode />;
+  }
 
   return (
     <div className="app-container" onClick={isLocked ? handleUnlock : undefined}>

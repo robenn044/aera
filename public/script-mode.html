@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AERA - Script Mode</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      width: 100%;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 1.2rem;
+      color: #a0a0a0;
+      margin-bottom: 40px;
+    }
+
+    .status {
+      font-size: 1.5rem;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      min-height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status.speaking {
+      background: rgba(0, 212, 255, 0.2);
+      border: 2px solid #00d4ff;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(0, 212, 255, 0.3); }
+      50% { box-shadow: 0 0 40px rgba(0, 212, 255, 0.6); }
+    }
+
+    .keys-container {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+
+    .key-button {
+      width: 180px;
+      padding: 25px 20px;
+      border: none;
+      border-radius: 15px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      border: 2px solid transparent;
+    }
+
+    .key-button:hover {
+      transform: translateY(-5px);
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .key-button:active, .key-button.active {
+      transform: scale(0.95);
+      border-color: #00d4ff;
+      background: rgba(0, 212, 255, 0.3);
+    }
+
+    .key-button .key-number {
+      display: block;
+      font-size: 2.5rem;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #00d4ff;
+    }
+
+    .key-button .key-label {
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+
+    .script-preview {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 15px;
+      padding: 25px;
+      text-align: left;
+      margin-top: 20px;
+    }
+
+    .script-preview h3 {
+      color: #00d4ff;
+      margin-bottom: 15px;
+      font-size: 1.1rem;
+    }
+
+    .script-line {
+      padding: 12px 15px;
+      margin: 8px 0;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      border-left: 3px solid #7b2cbf;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .script-line .key-indicator {
+      display: inline-block;
+      background: #00d4ff;
+      color: #1a1a2e;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-right: 10px;
+      font-size: 0.8rem;
+    }
+
+    .instructions {
+      margin-top: 30px;
+      padding: 20px;
+      background: rgba(123, 44, 191, 0.2);
+      border-radius: 10px;
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+
+    .instructions strong {
+      color: #00d4ff;
+    }
+
+    .voice-select {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+    }
+
+    .voice-select label {
+      display: block;
+      margin-bottom: 10px;
+      color: #a0a0a0;
+    }
+
+    .voice-select select {
+      padding: 10px 15px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+      min-width: 200px;
+    }
+
+    .voice-select select option {
+      background: #1a1a2e;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>AERA</h1>
+    <p class="subtitle">Script Mode - Prezantimi i Festivalit të Shkencave</p>
+
+    <div class="status" id="status">
+      Shtypni 1, 2, ose 3 për të filluar
+    </div>
+
+    <div class="keys-container">
+      <button class="key-button" id="btn1" onclick="speak(1)">
+        <span class="key-number">1</span>
+        <span class="key-label">Ora</span>
+      </button>
+      <button class="key-button" id="btn2" onclick="speak(2)">
+        <span class="key-number">2</span>
+        <span class="key-label">Moti</span>
+      </button>
+      <button class="key-button" id="btn3" onclick="speak(3)">
+        <span class="key-number">3</span>
+        <span class="key-label">Vetë-prezantimi</span>
+      </button>
+    </div>
+
+    <div class="script-preview">
+      <h3>Skenari i Prezantimit:</h3>
+      <div class="script-line">
+        <span class="key-indicator">1</span>
+        <strong>Kida:</strong> "Aera, sa është ora?" → <em>AERA përgjigjet</em>
+      </div>
+      <div class="script-line">
+        <span class="key-indicator">2</span>
+        <strong>Kida:</strong> "Si është moti sot?" → <em>AERA përgjigjet</em>
+      </div>
+      <div class="script-line">
+        <span class="key-indicator">3</span>
+        <strong>Amanda:</strong> "AERA, vetë-prezantohu!" → <em>AERA prezantohet</em>
+      </div>
+    </div>
+
+    <div class="voice-select">
+      <label>Zgjidh zërin:</label>
+      <select id="voiceSelect" onchange="updateVoice()">
+        <option value="">Duke ngarkuar zërat...</option>
+      </select>
+    </div>
+
+    <div class="instructions">
+      <strong>Udhëzime:</strong> Shtypni tastet 1, 2, ose 3 në tastierë ose klikoni butonat për të aktivizuar përgjigjet e AERA-s. Sigurohuni që volumi është aktiv.
+    </div>
+  </div>
+
+  <script>
+    // Albanian script lines
+    const scripts = {
+      1: "Ora është nëntë e gjysmë.",
+      2: "Moti sot është i kthjellët dhe me diell, me temperaturë rreth njëzet gradë celsius. Një ditë e përkryer për të dalë jashtë.",
+      3: "Përshëndetje! Unë jam AERA, asistentja juaj personale inteligjente. Jam këtu për t'ju ndihmuar në jetën e përditshme duke ju dhënë informacione të dobishme si ora, moti, dhe kalendari juaj. Me mua, mund të organizoni ditën tuaj më mirë, të kurseni kohë, dhe të jeni gjithmonë të informuar. Jam gjithmonë e gatshme t'ju ndihmoj me çdo pyetje që keni. Mjafton të më pyesni!"
+    };
+
+    let selectedVoice = null;
+    let voices = [];
+    const statusEl = document.getElementById('status');
+
+    // Load available voices
+    function loadVoices() {
+      voices = speechSynthesis.getVoices();
+      const voiceSelect = document.getElementById('voiceSelect');
+      voiceSelect.innerHTML = '';
+
+      // Find Albanian voices or fall back to others
+      const albanianVoices = voices.filter(v => v.lang.startsWith('sq'));
+      const italianVoices = voices.filter(v => v.lang.startsWith('it')); // Similar phonetics
+      const englishVoices = voices.filter(v => v.lang.startsWith('en'));
+
+      // Prioritize: Albanian > Italian > Any female voice > Default
+      let prioritizedVoices = [];
+      
+      if (albanianVoices.length > 0) {
+        prioritizedVoices = albanianVoices;
+      } else {
+        // Add all voices but prioritize ones that might sound better for Albanian
+        prioritizedVoices = voices;
+      }
+
+      prioritizedVoices.forEach((voice, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${voice.name} (${voice.lang})`;
+        if (voice.lang.startsWith('sq')) {
+          option.textContent += ' - Shqip';
+        }
+        voiceSelect.appendChild(option);
+      });
+
+      // Try to select an Albanian voice, or Italian, or a female English voice
+      const albanianIndex = voices.findIndex(v => v.lang.startsWith('sq'));
+      const italianFemaleIndex = voices.findIndex(v => v.lang.startsWith('it') && v.name.toLowerCase().includes('female'));
+      const italianIndex = voices.findIndex(v => v.lang.startsWith('it'));
+      const googleFemaleIndex = voices.findIndex(v => v.name.includes('Google') && (v.name.includes('Female') || v.name.includes('UK')));
+      
+      if (albanianIndex >= 0) {
+        selectedVoice = voices[albanianIndex];
+        voiceSelect.value = albanianIndex;
+      } else if (italianFemaleIndex >= 0) {
+        selectedVoice = voices[italianFemaleIndex];
+        voiceSelect.value = italianFemaleIndex;
+      } else if (italianIndex >= 0) {
+        selectedVoice = voices[italianIndex];
+        voiceSelect.value = italianIndex;
+      } else if (googleFemaleIndex >= 0) {
+        selectedVoice = voices[googleFemaleIndex];
+        voiceSelect.value = googleFemaleIndex;
+      } else if (voices.length > 0) {
+        selectedVoice = voices[0];
+        voiceSelect.value = 0;
+      }
+    }
+
+    function updateVoice() {
+      const voiceSelect = document.getElementById('voiceSelect');
+      const index = parseInt(voiceSelect.value);
+      if (!isNaN(index) && voices[index]) {
+        selectedVoice = voices[index];
+      }
+    }
+
+    // Speak function
+    function speak(key) {
+      const text = scripts[key];
+      if (!text) return;
+
+      // Cancel any ongoing speech
+      speechSynthesis.cancel();
+
+      // Visual feedback
+      const btn = document.getElementById(`btn${key}`);
+      btn.classList.add('active');
+      statusEl.classList.add('speaking');
+      statusEl.textContent = text;
+
+      // Create utterance
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+      
+      // Albanian-friendly settings
+      utterance.rate = 0.9;  // Slightly slower for clarity
+      utterance.pitch = 1.1; // Slightly higher for feminine voice
+      utterance.volume = 1;
+
+      utterance.onend = () => {
+        btn.classList.remove('active');
+        statusEl.classList.remove('speaking');
+        statusEl.textContent = 'Gati për komandën tjetër...';
+      };
+
+      utterance.onerror = (e) => {
+        console.error('Speech error:', e);
+        btn.classList.remove('active');
+        statusEl.classList.remove('speaking');
+        statusEl.textContent = 'Gabim në sintezën e zërit. Provoni përsëri.';
+      };
+
+      speechSynthesis.speak(utterance);
+    }
+
+    // Keyboard event listener
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '1') speak(1);
+      if (e.key === '2') speak(2);
+      if (e.key === '3') speak(3);
+    });
+
+    // Load voices when available
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+    
+    // Initial load attempt
+    setTimeout(loadVoices, 100);
+  </script>
+</body>
+</html>
