@@ -55,7 +55,7 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
   const [audioPeakPercent, setAudioPeakPercent] = useState(0);
   const [audioSourceLabel, setAudioSourceLabel] = useState('Not connected');
   const [isAudioActive, setIsAudioActive] = useState(false);
-  const [, setAudioStatus] = useState('Audio will be requested automatically');
+  const [audioStatus, setAudioStatus] = useState('Audio will be requested automatically');
   const [needsAudioGestureRetry, setNeedsAudioGestureRetry] = useState(false);
 
   const audioCaptureSupported =
@@ -180,7 +180,20 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
       await context.resume().catch(() => {});
     }
 
-    const source = context.createMediaStreamSource(new MediaStream(audioTracks));
+    // If the dashboard became active without a user gesture (e.g. face unlock),
+    // some browsers keep the AudioContext suspended, resulting in a 0% meter.
+    // In that case, prompt for a tap/click and retry.
+    if (context.state === 'suspended') {
+      stream.getTracks().forEach((track) => track.stop());
+      context.close().catch(() => {});
+      audioRequestInFlightRef.current = false;
+      setNeedsAudioGestureRetry(true);
+      setAudioSourceLabel('Tap to enable');
+      setAudioStatus('Tap/click once to enable the microphone meter.');
+      return;
+    }
+
+    const source = context.createMediaStreamSource(stream);
     const analyser = context.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.85;
@@ -536,6 +549,11 @@ const Dashboard = ({ active = true, cameraStream = null }) => {
             <div className="audio-monitor-row">
               <span className="audio-monitor-label">Source</span>
               <span className="audio-monitor-value" title={audioSourceLabel}>{audioSourceLabel}</span>
+            </div>
+
+            <div className="audio-monitor-row">
+              <span className="audio-monitor-label">Status</span>
+              <span className="audio-monitor-value" title={audioStatus}>{audioStatus}</span>
             </div>
 
             <div className="audio-monitor-row">
