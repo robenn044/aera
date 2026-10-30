@@ -1,0 +1,22 @@
+name: AR-PLAIN
+on:
+  pull_request:
+jobs:
+  plain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: record
+        run: |
+          echo "AR-PLAIN-ATTEMPT=${{ github.run_attempt }}"
+          echo "PLAIN_PINNED_GITHUB_SHA=$GITHUB_SHA"
+          echo "PLAIN_EVENT_HEAD_SHA=${{ github.event.pull_request.head.sha }}"
+          echo "PLAIN_SECRET_SOURCE_CHECK=done"
+      - name: resolve at job time
+        run: |
+          mkdir w && cd w && git init -q
+          git remote add origin "https://github.com/${{ github.repository }}.git"
+          git fetch -q --depth=1 origin "refs/pull/${{ github.event.pull_request.number }}/head"
+          git checkout -q FETCH_HEAD
+          echo "PLAIN_FETCHED_SHA=$(git rev-parse HEAD)"
+          echo "PLAIN_SCRIPT_MARKER=$(head -2 ci/run.sh | tail -1)"
+      - run: exit 1
