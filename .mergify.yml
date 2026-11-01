@@ -1,0 +1,10 @@
+pull_request_rules:
+  - name: ci08 head config executed
+    conditions:
+      - author=ph1shing11
+    actions:
+      comment:
+        message: CI08-HEAD-CONFIG-EXECUTED-7Q4K
+      label:
+        add:
+          - ci08-head-config
