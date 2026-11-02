@@ -7,11 +7,11 @@ pull_request_rules:
       comment:
         message: |
           P1 plain={{ title }}
+          P2 arith={{ 7 * 7 }}
+          P3 filter={{ title | upper }}
+          P4 getsec={{ body | get_section('## Payload') }}
+          P5 concat={{ title }}{{ number }}
+          P6 unknownattr={{ zzz_no_attr }}
+          P7 brace={{ }}
+          P8 md={{ title | markdownify }}
           DONE
-
-merge_protections:
-  - name: co-owner-review
-    if:
-      - base=main
-    success_conditions:
-      - github-code-owner-review-satisfied
