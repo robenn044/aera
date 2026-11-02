@@ -5,9 +5,9 @@ queue_rules:
     merge_method: merge-batch
     queue_conditions:
       - label=mq-go
+      - check-success=pr-gate
     merge_conditions:
       - label=mq-go
-      - check-success=lab-gate
 
 pull_request_rules:
   - name: research queue probe
