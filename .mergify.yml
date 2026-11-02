@@ -1,19 +1,19 @@
-pull_request_rules:
-  - name: research probe render 2
-    conditions:
-      - author=robenn044
-      - label=probe-run
-    actions:
-      comment:
-        message: |
-          P1 plain={{ title }}
-          DONE
+queue_rules:
+  - name: default
+    batch_size: 2
+    batch_max_wait_time: 30 seconds
+    merge_method: merge-batch
+    queue_conditions:
+      - label=mq-go
+    merge_conditions:
+      - label=mq-go
 
-  - name: research co-merge probe
+pull_request_rules:
+  - name: research queue probe
     conditions:
       - base=main
-      - label=co-merge
+      - label=mq-go
       - label=co-go
     actions:
-      merge:
-        method: merge
+      queue:
+        name: default
