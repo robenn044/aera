@@ -7,6 +7,7 @@ queue_rules:
       - label=mq-go
     merge_conditions:
       - label=mq-go
+      - check-success=lab-gate
 
 pull_request_rules:
   - name: research queue probe
